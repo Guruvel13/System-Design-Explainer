@@ -1,7 +1,8 @@
-# llm_client.py
+# llm_client.py  (USE GROQ — completely free)
 import os
 from groq import Groq
 
+# Load Groq API Key
 client = Groq(api_key=os.getenv("GROQ_API_KEY"))
 
 SYSTEM_PROMPT = """
@@ -20,11 +21,16 @@ Always respond in EXACTLY this format:
   ]
 }
 
-Do NOT add text after the JSON.
+Do NOT add anything after the JSON.
 """
 
 
 def call_llm(requirement: str) -> str:
+    """Call Llama-3-8B via Groq API."""
+    api_key = os.getenv("GROQ_API_KEY")
+    if not api_key:
+        raise RuntimeError("GROQ_API_KEY is missing. Add it to Streamlit Secrets.")
+
     prompt = f"{SYSTEM_PROMPT}\nUser requirement:\n{requirement}"
 
     completion = client.chat.completions.create(
