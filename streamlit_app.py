@@ -1,4 +1,3 @@
-import os
 import streamlit as st
 from llm_client import call_llm
 from diagram_parser import parse_output
@@ -10,51 +9,46 @@ st.set_page_config(
     layout="wide"
 )
 
+# ------------------- Header ------------------- #
 st.title("System Design Explainer")
-st.caption("Powered by Llama 3 (Free via Groq API)")
-st.markdown("---")
-
-# ------------------- Debug: Check if API Key Loaded ------------------- #
-st.subheader("Debug Info")
-st.write("GROQ KEY LOADED:", os.getenv("GROQ_API_KEY") is not None)
+st.caption("Powered by Llama 3.1 8B Instant — via Groq API")
 st.markdown("---")
 
 # ------------------- User Input ------------------- #
-st.subheader("Enter Your Requirement")
+st.subheader("Describe the System You Want to Design")
 requirement = st.text_area(
-    "Describe the system you want to design:",
+    "",
     "Design a scalable real-time chat application with millions of daily active users.",
-    height=160
+    height=150,
+    placeholder="Enter any system requirement. Example: Build an e-commerce platform handling 1M daily users."
 )
 
-generate = st.button("Generate System Design", use_container_width=True)
+generate = st.button("Generate Architecture", use_container_width=True)
 
 # ------------------- System Design Generation ------------------- #
 if generate:
     if not requirement.strip():
         st.error("Please enter a valid requirement.")
     else:
-        with st.spinner("Generating system design using Llama 3…"):
+        with st.spinner("Generating system design…"):
             try:
                 raw = call_llm(requirement)
                 explanation, nodes, edges = parse_output(raw)
 
+                # Explanation Section
                 st.markdown("---")
-                st.subheader("System Design Explanation")
+                st.subheader("Architecture Explanation")
                 st.write(explanation)
 
-                # ------------------- Diagram ------------------- #
+                # Diagram Section
+                st.markdown("---")
                 if nodes and edges:
                     st.subheader("Generated Architecture Diagram")
                     graph = build_graph(nodes, edges)
                     st.graphviz_chart(graph)
                 else:
-                    st.warning("The model did not return valid diagram JSON.")
-
-                # ------------------- Raw Output ------------------- #
-                with st.expander("Show Raw Model Output"):
-                    st.text(raw)
+                    st.warning("The model did not return valid diagram JSON. Try rewriting your prompt.")
 
             except Exception as e:
-                st.error("Error generating system design.")
+                st.error("An error occurred while generating the system design.")
                 st.exception(e)
