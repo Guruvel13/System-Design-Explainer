@@ -1,19 +1,18 @@
 import streamlit as st
-
 from llm_client import call_llm
 from diagram_parser import parse_output
 from diagram_builder import build_graph
 
-st.title("System Design Explainer (Mistral-7B Free Model)")
+st.title("System Design Explainer (Gemma-2-2B-IT – Free Model)")
 
-req = st.text_area(
+requirement = st.text_area(
     "Enter requirement:",
-    "Design a scalable chat application supporting 10M daily users."
+    "Design a scalable real-time chat application."
 )
 
 if st.button("Generate"):
-    with st.spinner("Thinking…"):
-        raw = call_llm(req)
+    with st.spinner("Calling LLM…"):
+        raw = call_llm(requirement)
         explanation, nodes, edges = parse_output(raw)
 
     st.subheader("Explanation")
@@ -21,10 +20,10 @@ if st.button("Generate"):
 
     if nodes and edges:
         st.subheader("Diagram")
-        fig = build_graph(nodes, edges)
-        st.graphviz_chart(fig)
+        graph = build_graph(nodes, edges)
+        st.graphviz_chart(graph)
     else:
-        st.warning("Diagram JSON missing or invalid")
+        st.warning("Diagram JSON missing or invalid.")
 
-    st.subheader("Raw Output (Debug)")
+    st.subheader("Raw Output")
     st.text(raw)
