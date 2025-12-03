@@ -1,54 +1,39 @@
+# llm_client.py
 import os
-import requests
+from groq import Groq
 
-HF_API_TOKEN = os.getenv("HF_API_TOKEN")
-HF_MODEL_URL = os.getenv("HF_MODEL_URL")
-
-print("DEBUG::TOKEN =", HF_API_TOKEN)
-print("DEBUG::MODEL_URL =", HF_MODEL_URL)
-
-HEADERS = {
-    "Authorization": f"Bearer {HF_API_TOKEN}",
-    "Content-Type": "application/json"
-}
+client = Groq(api_key=os.getenv("GROQ_API_KEY"))
 
 SYSTEM_PROMPT = """
 You are a senior system architect.
 
+Always respond in EXACTLY this format:
+
 [EXPLANATION]
-<your explanation>
+<bullet point architecture breakdown>
 
 [DIAGRAM_JSON]
 {
-  "nodes": ["A","B"],
-  "edges": [["A","B"]]
+  "nodes": ["Component1","Component2"],
+  "edges": [
+    ["Component1","Component2"]
+  ]
 }
+
+Do NOT add text after the JSON.
 """
 
 
 def call_llm(requirement: str) -> str:
-    if not HF_MODEL_URL:
-        raise RuntimeError("HF_MODEL_URL is missing. Set it in Streamlit Secrets.")
+    prompt = f"{SYSTEM_PROMPT}\nUser requirement:\n{requirement}"
 
-    payload = {
-        "inputs": f"{SYSTEM_PROMPT}\nUser requirement:\n{requirement}",
-        "parameters": {
-            "temperature": 0.3,
-            "max_new_tokens": 700
-        }
-    }
-
-    response = requests.post(
-        HF_MODEL_URL,
-        headers=HEADERS,
-        json=payload,
-        timeout=200
+    completion = client.chat.completions.create(
+        model="llama3-8b-8192",
+        messages=[
+            {"role": "user", "content": prompt}
+        ],
+        temperature=0.3,
+        max_tokens=800
     )
 
-    response.raise_for_status()
-
-    data = response.json()
-    if isinstance(data, list) and "generated_text" in data[0]:
-        return data[0]["generated_text"]
-
-    raise RuntimeError(f"Unexpected response: {data}")
+    return completion.choices[0].message.content
