@@ -5,12 +5,12 @@ from diagram_builder import build_graph
 
 # ------------------- Page Setup ------------------- #
 st.set_page_config(
-    page_title="System Design Explainer",
+    page_title="SystemSketch AI",
     layout="wide"
 )
 
 # ------------------- Header ------------------- #
-st.title("System Design Explainer")
+st.title("SystemSketch AI")
 st.caption("Powered by Llama 3.1 8B Instant — via Groq API")
 st.markdown("---")
 
