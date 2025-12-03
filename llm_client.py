@@ -1,11 +1,11 @@
 import os
 import requests
-from dotenv import load_dotenv
 
-load_dotenv()
+HF_API_TOKEN = os.getenv("HF_API_TOKEN")
+HF_MODEL_URL = os.getenv("HF_MODEL_URL")
 
-HF_API_TOKEN = os.getenv("")
-HF_MODEL_URL = os.getenv("https://router.huggingface.co/hf-inference/models/google/gemma-2-2b-it")
+print("DEBUG::TOKEN =", HF_API_TOKEN)
+print("DEBUG::MODEL_URL =", HF_MODEL_URL)
 
 HEADERS = {
     "Authorization": f"Bearer {HF_API_TOKEN}",
@@ -15,30 +15,26 @@ HEADERS = {
 SYSTEM_PROMPT = """
 You are a senior system architect.
 
-Your response MUST follow this exact format:
-
 [EXPLANATION]
-<bullet point architecture explanation>
+<your explanation>
 
 [DIAGRAM_JSON]
 {
-  "nodes": ["A","B","C"],
-  "edges": [
-    ["A","B"],
-    ["B","C"]
-  ]
+  "nodes": ["A","B"],
+  "edges": [["A","B"]]
 }
-Do NOT add extra text after the JSON.
 """
 
 
 def call_llm(requirement: str) -> str:
+    if not HF_MODEL_URL:
+        raise RuntimeError("HF_MODEL_URL is missing. Set it in Streamlit Secrets.")
+
     payload = {
         "inputs": f"{SYSTEM_PROMPT}\nUser requirement:\n{requirement}",
         "parameters": {
             "temperature": 0.3,
-            "max_new_tokens": 700,
-            "return_full_text": False
+            "max_new_tokens": 700
         }
     }
 
@@ -52,9 +48,7 @@ def call_llm(requirement: str) -> str:
     response.raise_for_status()
 
     data = response.json()
-
-    # Router ALWAYS returns list with generated_text
     if isinstance(data, list) and "generated_text" in data[0]:
         return data[0]["generated_text"]
 
-    raise RuntimeError(f"Unexpected HF response: {data}")
+    raise RuntimeError(f"Unexpected response: {data}")
