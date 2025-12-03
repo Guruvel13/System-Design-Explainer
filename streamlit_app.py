@@ -16,11 +16,11 @@ st.markdown("---")
 
 # ------------------- User Input ------------------- #
 st.subheader("Describe the System You Want to Design")
+
 requirement = st.text_area(
-    "",
-    "Design a scalable real-time chat application with millions of daily active users.",
-    height=150,
-    placeholder="Enter any system requirement. Example: Build an e-commerce platform handling 1M daily users."
+    "Enter your system requirement below:",
+    placeholder="Example: Build a scalable real-time chat application supporting millions of users.",
+    height=150
 )
 
 generate = st.button("Generate Architecture", use_container_width=True)
@@ -35,19 +35,19 @@ if generate:
                 raw = call_llm(requirement)
                 explanation, nodes, edges = parse_output(raw)
 
-                # Explanation Section
+                # Explanation
                 st.markdown("---")
                 st.subheader("Architecture Explanation")
                 st.write(explanation)
 
-                # Diagram Section
+                # Diagram
                 st.markdown("---")
                 if nodes and edges:
                     st.subheader("Generated Architecture Diagram")
                     graph = build_graph(nodes, edges)
                     st.graphviz_chart(graph)
                 else:
-                    st.warning("The model did not return valid diagram JSON. Try rewriting your prompt.")
+                    st.warning("The model did not return valid diagram JSON. Try refining your prompt.")
 
             except Exception as e:
                 st.error("An error occurred while generating the system design.")
