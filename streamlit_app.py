@@ -27,3 +27,8 @@ if st.button("Generate"):
 
     st.subheader("Raw Output")
     st.text(raw)
+    
+if not response.ok:
+    print("STATUS:", response.status_code)
+    print("RESPONSE:", response.text)
+    raise RuntimeError("HF API error")
