@@ -1,19 +1,37 @@
+# diagram_parser.py
 import json
+import re
 
 def parse_output(text: str):
+    """
+    Extracts [EXPLANATION] and [DIAGRAM_JSON] sections.
+    Returns: explanation, nodes, edges, annotations, layers, edge_types
+    """
     if "[EXPLANATION]" not in text or "[DIAGRAM_JSON]" not in text:
-        return text, [], []
+        return text, [], [], {}, {}, {}
 
-    explanation_part = text.split("[EXPLANATION]", 1)[1]
-    explanation, json_section = explanation_part.split("[DIAGRAM_JSON]", 1)
+    # Split explanation
+    try:
+        exp_section = text.split("[EXPLANATION]", 1)[1]
+        explanation, json_section = exp_section.split("[DIAGRAM_JSON]", 1)
+        explanation = explanation.strip()
+    except:
+        return text, [], [], {}, {}, {}
 
-    explanation = explanation.strip()
-
-    start = json_section.find("{")
-    end = json_section.rfind("}")
+    # Extract JSON block
+    json_match = re.search(r"\{.*\}", json_section, re.DOTALL)
+    if not json_match:
+        return explanation, [], [], {}, {}, {}
 
     try:
-        obj = json.loads(json_section[start:end+1])
-        return explanation, obj.get("nodes", []), obj.get("edges", [])
-    except:
-        return explanation, [], []
+        obj = json.loads(json_match.group())
+        return (
+            explanation,
+            obj.get("nodes", []),
+            obj.get("edges", []),
+            obj.get("annotations", {}),
+            obj.get("layers", {}),
+            obj.get("edge_types", {})
+        )
+    except Exception:
+        return explanation, [], [], {}, {}, {}
