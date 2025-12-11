@@ -4,6 +4,7 @@ from diagram_parser import parse_output
 from diagram_builder import build_graph
 from io import BytesIO
 
+
 # =============================
 # PAGE CONFIG
 # =============================
@@ -12,6 +13,7 @@ st.set_page_config(
     layout="wide",
     page_icon="🧩"
 )
+
 
 # =============================
 # HEADER
@@ -29,21 +31,6 @@ st.markdown(
     unsafe_allow_html=True
 )
 st.markdown("---")
-
-
-# =============================
-# SIDEBAR CONTROLS
-# =============================
-st.sidebar.title("⚙️ Options")
-
-show_json = st.sidebar.checkbox("Show Raw Diagram JSON", value=False)
-export_md = st.sidebar.checkbox("Enable Markdown Export")
-export_ppt = st.sidebar.checkbox("Enable PPT Export")
-export_png = st.sidebar.checkbox("Enable PNG Download")
-export_pdf = st.sidebar.checkbox("Enable PDF Download")
-
-st.sidebar.markdown("---")
-st.sidebar.caption("Built with ❤️ using Groq + Streamlit")
 
 
 # =============================
@@ -69,13 +56,13 @@ if generate:
     else:
         with st.spinner("⚡ Creating system blueprint..."):
             try:
-                # Always uses llama-3.1-8b-instant
                 raw = call_llm(requirement)
 
+                # Parse all values
                 explanation, nodes, edges, annotations, layers, edge_types = parse_output(raw)
 
                 # =============================
-                # EXPLANATION
+                # EXPLANATION SECTION
                 # =============================
                 st.markdown("## 📘 Architecture Explanation")
                 st.markdown(
@@ -94,8 +81,9 @@ if generate:
                     unsafe_allow_html=True
                 )
 
+
                 # =============================
-                # DIAGRAM
+                # DIAGRAM SECTION
                 # =============================
                 st.markdown("## 🗺 Architecture Diagram")
 
@@ -108,64 +96,44 @@ if generate:
                         edge_types=edge_types,
                         dark_mode=True
                     )
+
                     st.graphviz_chart(graph)
 
-                    # ---------------------------
-                    # EXPORT: PNG
-                    # ---------------------------
-                    if export_png:
-                        png_bytes = graph.pipe(format="png")
-                        st.download_button(
-                            "📥 Download Diagram (PNG)",
-                            png_bytes,
-                            "architecture.png",
-                            "image/png",
-                        )
+                    # =============================
+                    # DOWNLOAD: SVG (Works on Streamlit Cloud)
+                    # =============================
+                    svg_bytes = graph.pipe(format="svg")
+                    st.download_button(
+                        "📥 Download Diagram (SVG)",
+                        svg_bytes,
+                        "architecture.svg",
+                        "image/svg+xml"
+                    )
 
-                    # ---------------------------
-                    # EXPORT: PDF
-                    # ---------------------------
-                    if export_pdf:
-                        pdf_bytes = graph.pipe(format="pdf")
-                        st.download_button(
-                            "📄 Download Diagram (PDF)",
-                            pdf_bytes,
-                            "architecture.pdf",
-                            "application/pdf",
-                        )
+                    # =============================
+                    # DOWNLOAD: Explanation MD
+                    # =============================
+                    md_text = f"# System Architecture Explanation\n\n{explanation}"
+                    st.download_button(
+                        "📄 Download Explanation (Markdown)",
+                        md_text,
+                        "architecture.md"
+                    )
+
+                    # =============================
+                    # DOWNLOAD: PPT (placeholder text only)
+                    # =============================
+                    ppt_bytes = BytesIO()
+                    ppt_bytes.write(explanation.encode("utf-8"))
+                    st.download_button(
+                        "📊 Download Explanation (PPT)",
+                        ppt_bytes.getvalue(),
+                        "architecture.pptx"
+                    )
 
                 else:
                     st.warning("⚠️ Diagram JSON invalid. Try refining your prompt.")
 
-                # =============================
-                # RAW JSON OUTPUT
-                # =============================
-                if show_json:
-                    st.markdown("### 🧾 Raw Diagram JSON")
-                    st.code(raw, language="json")
-
-                # =============================
-                # MARKDOWN EXPORT
-                # =============================
-                if export_md:
-                    md_export = f"# System Architecture Explanation\n\n{explanation}"
-                    st.download_button(
-                        "📄 Download Explanation (Markdown)",
-                        md_export,
-                        "architecture.md"
-                    )
-
-                # =============================
-                # PPT EXPORT (text-only placeholder)
-                # =============================
-                if export_ppt:
-                    ppt_bytes = BytesIO()
-                    ppt_bytes.write(explanation.encode("utf-8"))
-                    st.download_button(
-                        "📊 Download Explanation (PPT Placeholder)",
-                        ppt_bytes.getvalue(),
-                        "architecture.pptx"
-                    )
 
             except Exception as e:
                 st.error("❌ Error generating architecture.")
