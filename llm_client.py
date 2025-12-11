@@ -1,5 +1,5 @@
 # llm_client.py
-# Stable Groq Llama client for SystemSketch AI — fully fixed version
+# Stable Groq Llama client for SystemSketch AI — fully fixed, production-ready
 
 import os
 from typing import Optional
@@ -86,8 +86,10 @@ Output must be exactly:
 
 def call_llm(requirement: str, model_name: Optional[str] = "llama-3.1-8b-instant") -> str:
     """
-    Sends the SYSTEM_PROMPT + USER REQUIREMENT to Groq and returns clean assistant content.
-    Fully compatible with all Groq SDK variations.
+    Send the SYSTEM_PROMPT + USER REQUIREMENT to Groq and return assistant content.
+
+    This function is defensive against variations in Groq SDK response formats.
+    Raises RuntimeError on missing API key or Groq errors.
     """
 
     api_key = os.getenv("GROQ_API_KEY")
@@ -108,30 +110,47 @@ def call_llm(requirement: str, model_name: Optional[str] = "llama-3.1-8b-instant
             max_tokens=1400,
             top_p=0.9
         )
+    except Exception as e:
+        raise RuntimeError(f"GROQ API request failed: {e}")
 
-        # -------------------------------------------
-        # UNIVERSAL SAFE CONTENT EXTRACTION LAYER
-        # Works across all Groq Python SDK versions
-        # -------------------------------------------
+    # Defensive: ensure choices exist
+    if not getattr(completion, "choices", None):
+        raise RuntimeError("GROQ API returned no choices in completion response.")
 
-        choice = completion.choices[0]
+    choice = completion.choices[0]
 
-        # Case 1: Most common modern Groq SDK format
+    # -------------------------------------------
+    # UNIVERSAL SAFE CONTENT EXTRACTION
+    # - supports .message.content, dict-like message, .text, fallback to str(choice)
+    # -------------------------------------------
+
+    # Case 1: modern shape with .message.content
+    try:
         if hasattr(choice, "message") and hasattr(choice.message, "content"):
-            return choice.message.content.strip()
+            content = choice.message.content
+            if isinstance(content, str):
+                return content.strip()
+            # if content isn't str, coerce
+            return str(content).strip()
+    except Exception:
+        # continue to other extraction strategies
+        pass
 
-        # Case 2: Some SDKs return dict-like messages
+    # Case 2: message is dict-like
+    try:
         if hasattr(choice, "message") and isinstance(choice.message, dict):
             msg = choice.message
-            content = msg.get("content") or msg.get("text") or str(msg)
-            return content.strip()
+            content = msg.get("content") or msg.get("text") or None
+            if content:
+                return str(content).strip()
+    except Exception:
+        pass
 
-        # Case 3: Older Groq compatibility: `.text`
-        if hasattr(choice, "text"):
-            return choice.text.strip()
+    # Case 3: older shape with .text
+    if hasattr(choice, "text"):
+        txt = getattr(choice, "text")
+        if isinstance(txt, str) and txt.strip():
+            return txt.strip()
 
-        # Case 4: Emergency fallback
-        return str(choice).strip()
-
-    except Exception as e:
-        raise RuntimeError(f"GROQ API ERROR: {str(e)}")
+    # Final fallback
+    return str(choice).strip()
