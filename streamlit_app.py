@@ -3,7 +3,7 @@ from llm_client import call_llm
 from diagram_parser import parse_output
 from diagram_builder import build_graph
 from io import BytesIO
-from kroki_renderer import generate_svg_from_dot, generate_png_from_dot, generate_pdf_from_dot
+from kroki_renderer import generate_png_from_dot, generate_pdf_from_dot
 
 # =============================
 # PAGE CONFIG
@@ -38,7 +38,7 @@ st.markdown("### 📝 Describe the System You Want to Design")
 
 requirement = st.text_area(
     "💡 Your system requirement:",
-    placeholder="Example: Build a scalable real-time chat application supporting millions of users.",
+    placeholder="Example: Build a scalable real-time chat application.",
     height=160
 )
 
@@ -49,29 +49,29 @@ generate = st.button("✨ Generate Architecture", use_container_width=True)
 # =============================
 if generate:
     if not requirement.strip():
-        st.error("⚠️ Please enter a valid system requirement.")
+        st.error("⚠️ Please enter a valid requirement.")
     else:
         with st.spinner("⚡ Creating system blueprint..."):
             try:
                 raw = call_llm(requirement)
 
-                # Parse all values
+                # Extract structured data
                 explanation, nodes, edges, annotations, layers, edge_types = parse_output(raw)
 
                 # =============================
-                # EXPLANATION SECTION
+                # EXPLANATION
                 # =============================
                 st.markdown("## 📘 Architecture Explanation")
                 st.markdown(
                     f"""
-                    <div style="
+                    <div style='
                         background-color:#ffffff10;
                         padding:20px;
                         border-radius:12px;
                         border:1px solid #333;
                         color:white;
                         line-height:1.6;
-                    ">
+                    '>
                         {explanation}
                     </div>
                     """,
@@ -79,11 +79,12 @@ if generate:
                 )
 
                 # =============================
-                # DIAGRAM SECTION
+                # DIAGRAM
                 # =============================
                 st.markdown("## 🗺 Architecture Diagram")
 
                 if nodes and edges:
+
                     graph = build_graph(
                         nodes,
                         edges,
@@ -93,76 +94,39 @@ if generate:
                         dark_mode=True
                     )
 
-                    # Render interactive diagram in Streamlit UI
                     st.graphviz_chart(graph)
 
-                    # ----------------------------
-                    # SVG Export via Kroki (recommended)
-                    # ----------------------------
+                    # =============================
+                    # DOWNLOAD BUTTON — PNG
+                    # =============================
                     try:
-                        svg_bytes = generate_svg_from_dot(graph.source)
+                        png_bytes = generate_png_from_dot(graph.source)
+
                         st.download_button(
-                            "📥 Download Diagram (SVG)",
-                            svg_bytes,
-                            "architecture.svg",
-                            "image/svg+xml"
+                            "📥 Download Architecture (PNG)",
+                            png_bytes,
+                            "architecture.png",
+                            "image/png"
                         )
-                    except Exception as ex_svg:
-                        st.warning("SVG export failed (Kroki). You can still copy diagram source or try again.")
-                        st.exception(ex_svg)
-
-                    # ----------------------------
-                    # PNG Export (on-demand)
-                    # ----------------------------
-                    if st.button("📥 Generate & Download PNG"):
-                        try:
-                            png_bytes = generate_png_from_dot(graph.source)
-                            st.download_button(
-                                "Download PNG now",
-                                png_bytes,
-                                "architecture.png",
-                                "image/png"
-                            )
-                        except Exception as ex_png:
-                            st.error("PNG generation failed (Kroki).")
-                            st.exception(ex_png)
-
-                    # ----------------------------
-                    # PDF Export (on-demand)
-                    # ----------------------------
-                    if st.button("📄 Generate & Download PDF"):
-                        try:
-                            pdf_bytes = generate_pdf_from_dot(graph.source)
-                            st.download_button(
-                                "Download PDF now",
-                                pdf_bytes,
-                                "architecture.pdf",
-                                "application/pdf"
-                            )
-                        except Exception as ex_pdf:
-                            st.error("PDF generation failed (Kroki).")
-                            st.exception(ex_pdf)
+                    except Exception as e_png:
+                        st.error("PNG generation failed.")
+                        st.exception(e_png)
 
                     # =============================
-                    # DOWNLOAD: Explanation MD
+                    # DOWNLOAD BUTTON — PDF
                     # =============================
-                    md_text = f"# System Architecture Explanation\n\n{explanation}"
-                    st.download_button(
-                        "📄 Download Explanation (Markdown)",
-                        md_text,
-                        "architecture.md"
-                    )
+                    try:
+                        pdf_bytes = generate_pdf_from_dot(graph.source)
 
-                    # =============================
-                    # DOWNLOAD: PPT (placeholder text only)
-                    # =============================
-                    ppt_bytes = BytesIO()
-                    ppt_bytes.write(explanation.encode("utf-8"))
-                    st.download_button(
-                        "📊 Download Explanation (PPT)",
-                        ppt_bytes.getvalue(),
-                        "architecture.pptx"
-                    )
+                        st.download_button(
+                            "📄 Download Architecture (PDF)",
+                            pdf_bytes,
+                            "architecture.pdf",
+                            "application/pdf"
+                        )
+                    except Exception as e_pdf:
+                        st.error("PDF generation failed.")
+                        st.exception(e_pdf)
 
                 else:
                     st.warning("⚠️ Diagram JSON invalid. Try refining your prompt.")
