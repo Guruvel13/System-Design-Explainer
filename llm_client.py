@@ -1,98 +1,137 @@
 # llm_client.py
+# Stable Groq Llama client for SystemSketch AI — fully fixed version
+
 import os
 from typing import Optional
 from groq import Groq
 
+
 SYSTEM_PROMPT = """
-You are a senior system architect.
+You are a senior system architect with expert-level experience designing fault-tolerant, highly scalable distributed systems.
 
-You MUST output ONLY the following two sections, in this exact order:
+Your output MUST contain ONLY the two sections shown below.
 
+==================================================
 [EXPLANATION]
-Plain text only. No markdown (#, *, -, =). No lists. No arrows. 
-Use simple section titles like:
-Problem Summary
-Architecture Overview
-Components
-Data Flow
-Scaling
-Storage
-Security
-Monitoring
-Tech Stack
+==================================================
+Provide a deeply detailed, highly practical system design (max ~700 words).
+Write clearly, visually, and with strong architectural reasoning. Use headings, short paragraphs, and bullets.
 
-NO markdown formatting allowed.
-NO symbols like →, —, ###, **.
-Short sentences only.
+Include the following subsections:
+1) Problem Summary
+2) Functional Breakdown
+3) Non-Functional Impact
+4) High-Level Architecture (with justification)
+5) Layered Architecture View
+6) Step-by-Step Data Flow (with arrows →)
+7) Component Responsibilities
+8) Detailed Diagram Explanation (every node + every edge explained)
+9) Scalability & Partitioning
+10) Storage Strategy
+11) Caching Strategy
+12) Load Balancing & Traffic Management
+13) Security & Compliance
+14) Fault Tolerance & Recovery
+15) Observability & SLOs
+16) Deployment & DevOps
+17) Trade-offs & Alternatives
+18) Recommended Tech Stack
 
-Next section:
+Rules:
+- No code.
+- Keep paragraphs short.
+- Use clear heading labels (not markdown syntax like ### or **).
+- The "Detailed Diagram Explanation" MUST explain each component and each edge.
 
+==================================================
 [DIAGRAM_JSON]
-STRICT VALID JSON ONLY. NO COMMENTS.
-
-JSON RULES:
-- Use double quotes only.
-- Commas required between items.
-- No trailing commas.
-- No semicolons.
-- No extra text after JSON.
-- No markdown formatting.
-- No arrows like → inside JSON.
-
-The JSON MUST match this shape EXACTLY:
+==================================================
+Return STRICT VALID JSON ONLY.
 
 {
-  "nodes": ["A", "B"],
-  "edges": [["A", "B"]],
-  "annotations": { "A": "desc", "B": "desc" },
-  "layers": {
-    "frontend": [],
-    "backend": [],
-    "data": [],
-    "infrastructure": []
+  "nodes": ["ComponentA", "ComponentB"],
+  "edges": [["ComponentA", "ComponentB"]],
+  "annotations": {
+    "ComponentA": "Short description (<= 10 words)",
+    "ComponentB": "Short description (<= 10 words)"
   },
-  "edge_types": { "A->B": "HTTP" }
+  "layers": {
+    "frontend": ["Browser", "Mobile App"],
+    "backend": ["API Gateway", "Auth Service", "X Service"],
+    "data": ["DB", "Cache"],
+    "infrastructure": ["Load Balancer", "Monitoring"]
+  },
+  "edge_types": {
+    "ComponentA->ComponentB": "HTTP",
+    "ComponentB->ComponentC": "Async Event"
+  }
 }
 
-ANNOTATION RULE:
-- Each description must be <= 10 words.
+STRICT RULES:
+- JSON must be valid and complete.
+- No comments.
+- No trailing commas.
+- No text after JSON.
+- Exactly 3–12 meaningful components.
+- Annotation text <= 10 words.
+- Edges must reflect data flow described in the explanation.
 
-EDGES RULE:
-- Edge keys MUST follow exact format: "Source->Target"
-
-Ensure JSON is VALID and PARSEABLE.
+Output must be exactly:
+[EXPLANATION]
+<text>
+[DIAGRAM_JSON]
+<json>
 """
 
-def call_llm(requirement: str, model_name: str = "llama-3.1-8b-instant") -> str:
+
+def call_llm(requirement: str, model_name: Optional[str] = "llama-3.1-8b-instant") -> str:
+    """
+    Sends the SYSTEM_PROMPT + USER REQUIREMENT to Groq and returns clean assistant content.
+    Fully compatible with all Groq SDK variations.
+    """
+
     api_key = os.getenv("GROQ_API_KEY")
     if not api_key:
-        raise RuntimeError("GROQ_API_KEY missing in Streamlit Secrets.")
+        raise RuntimeError(
+            "GROQ_API_KEY missing. Add it inside Streamlit Secrets:\n"
+            'GROQ_API_KEY = "gsk_your_real_key_here"'
+        )
 
     client = Groq(api_key=api_key)
-
     prompt = f"{SYSTEM_PROMPT}\n\nUSER REQUIREMENT:\n{requirement}"
 
     try:
         completion = client.chat.completions.create(
             model=model_name,
             messages=[{"role": "user", "content": prompt}],
-            temperature=0.1,
+            temperature=0.15,
             max_tokens=1400,
             top_p=0.9
         )
 
-        choice = completion.choices[0]
-        msg = choice.message
+        # -------------------------------------------
+        # UNIVERSAL SAFE CONTENT EXTRACTION LAYER
+        # Works across all Groq Python SDK versions
+        # -------------------------------------------
 
-        # Safely extract message across all SDK variations
-        if hasattr(msg, "content"):
-            return msg.content.strip()
-        if isinstance(msg, dict):
-            return msg.get("content", "").strip()
+        choice = completion.choices[0]
+
+        # Case 1: Most common modern Groq SDK format
+        if hasattr(choice, "message") and hasattr(choice.message, "content"):
+            return choice.message.content.strip()
+
+        # Case 2: Some SDKs return dict-like messages
+        if hasattr(choice, "message") and isinstance(choice.message, dict):
+            msg = choice.message
+            content = msg.get("content") or msg.get("text") or str(msg)
+            return content.strip()
+
+        # Case 3: Older Groq compatibility: `.text`
         if hasattr(choice, "text"):
             return choice.text.strip()
 
+        # Case 4: Emergency fallback
         return str(choice).strip()
 
     except Exception as e:
-        raise RuntimeError(f"GROQ API ERROR: {e}")
+        raise RuntimeError(f"GROQ API ERROR: {str(e)}")
