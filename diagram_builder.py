@@ -1,40 +1,33 @@
-# diagram_builder.py
+# diagram_builder.py (FINAL FIXED)
 from graphviz import Digraph
 
-def build_graph(nodes, edges, annotations=None, layers=None, edge_types=None, dark_mode=True):
-    if dark_mode:
-        bg = "#0f0f0f"
-        font = "white"
-        cluster = "#2b2b2b"
-        box = "#1e1e1e"
-    else:
-        bg = "white"
-        font = "black"
-        cluster = "#f0f0f0"
-        box = "#ffffff"
+def build_graph(nodes, edges, annotations=None, layers=None, edge_types=None, dark_mode=False):
+
+    annotations = annotations or {}
+    layers = layers or {}
+    edge_types = edge_types or {}
+
+    fg = "white" if dark_mode else "black"
+    bg = "#111111" if dark_mode else "white"
+    node_color = "#222222" if dark_mode else "#f8f8f8"
 
     dot = Digraph()
-    dot.attr(rankdir="LR", bgcolor=bg, fontcolor=font)
+    dot.attr(rankdir="LR", bgcolor=bg)
 
-    # Draw layers
+    # Layered nodes
     if layers:
-        for lname, comps in layers.items():
-            with dot.subgraph(name=f"cluster_{lname}") as sub:
-                sub.attr(label=lname.upper(), style="filled", bgcolor=cluster)
-
+        for layer, comps in layers.items():
+            with dot.subgraph(name=f"cluster_{layer}") as sub:
+                sub.attr(label=layer.upper(), color="#666666")
                 for c in comps:
-                    desc = annotations.get(c, "") if annotations else ""
-                    label = f"{c}\n{desc}" if desc else c
-                    sub.node(c, label=label, style="filled", fillcolor=box, fontcolor=font)
+                    sub.node(c, f"{c}\n{annotations.get(c,'')}", style="filled", fillcolor=node_color, fontcolor=fg)
     else:
         for c in nodes:
-            desc = annotations.get(c, "") if annotations else ""
-            label = f"{c}\n{desc}" if desc else c
-            dot.node(c, label=label, style="filled", fillcolor=box, fontcolor=font)
+            dot.node(c, f"{c}\n{annotations.get(c,'')}", style="filled", fillcolor=node_color, fontcolor=fg)
 
     # Edges
     for src, dst in edges:
-        elabel = edge_types.get(f"{src}->{dst}", "") if edge_types else ""
-        dot.edge(src, dst, label=elabel, fontcolor=font)
+        label = edge_types.get(f"{src}->{dst}", "")
+        dot.edge(src, dst, label=label, fontcolor=fg)
 
     return dot
