@@ -1,58 +1,192 @@
 # diagram_parser.py
+# Robust parser + optional LLM-assisted JSON repair
 import json
 import re
+from typing import Tuple, List, Dict, Any, Callable, Optional
 
 
-def parse_output(text: str):
+def _normalize_quotes(s: str) -> str:
+    s = s.replace("“", '"').replace("”", '"').replace("‘", "'").replace("’", "'")
+    # conservative: fix single-quoted JSON keys/values into double quotes when obvious
+    s = re.sub(r"(?<=\{|,)\s*'([^']+)'\s*:", r'"\1":', s)
+    s = re.sub(r':\s*\'([^\']*)\'(?=\s*[,\}])', r': "\1"', s)
+    return s
+
+
+def _remove_trailing_commas(s: str) -> str:
+    s = re.sub(r",\s*}", "}", s)
+    s = re.sub(r",\s*\]", "]", s)
+    return s
+
+
+def _fix_semicolons(s: str) -> str:
+    # replace semicolons used as separators with commas (naive but helpful)
+    s = re.sub(r";\s*(?=[\]\}\"])", ",", s)
+    s = s.replace(";\n", ",\n")
+    return s
+
+
+def _collapse_multiple_commas(s: str) -> str:
+    return re.sub(r",\s*,+", ",", s)
+
+
+def _extract_json_candidates(text: str) -> List[str]:
     """
-    Extracts clean [EXPLANATION] and [DIAGRAM_JSON] sections.
-    Works even if model adds formatting or equals lines.
-    Returns: explanation, nodes, edges, annotations, layers, edge_types
+    Return balanced {...} substrings using a stack (avoids greedy regex issues).
     """
+    candidates = []
+    stack = []
+    start_idx = None
+    for i, ch in enumerate(text):
+        if ch == "{":
+            if not stack:
+                start_idx = i
+            stack.append("{")
+        elif ch == "}":
+            if stack:
+                stack.pop()
+                if not stack and start_idx is not None:
+                    candidates.append(text[start_idx:i + 1])
+                    start_idx = None
+    return candidates
 
-    # Normalize spaces + remove decorative lines
-    cleaned = text.replace("=", "").strip()
 
-    # ---------------------------------------------------
-    # 1. Extract EXPLANATION safely
-    # ---------------------------------------------------
-    exp_match = re.search(
-        r"\[EXPLANATION\](.*?)(?=\[DIAGRAM_JSON\])",
-        cleaned,
-        re.DOTALL
-    )
+def _try_load_candidate(raw: str) -> Optional[Dict[str, Any]]:
+    """
+    Try several conservative repair attempts and json.loads each.
+    Return dict if successful, else None.
+    """
+    attempts = [
+        raw,
+        _normalize_quotes(raw),
+        _normalize_quotes(_fix_semicolons(raw)),
+        _normalize_quotes(_fix_semicolons(_remove_trailing_commas(raw))),
+        _normalize_quotes(_fix_semicolons(_remove_trailing_commas(_collapse_multiple_commas(raw)))),
+    ]
+    for attempt in attempts:
+        try:
+            return json.loads(attempt)
+        except Exception:
+            continue
+    # try clipping to first/last braces and retry normalized
+    first = raw.find("{")
+    last = raw.rfind("}")
+    if first != -1 and last != -1 and last > first:
+        sub = raw[first:last + 1]
+        try:
+            return json.loads(_normalize_quotes(_fix_semicolons(_remove_trailing_commas(sub))))
+        except Exception:
+            return None
+    return None
 
-    if not exp_match:
-        # Cannot parse explanation → return raw text
-        return text, [], [], {}, {}, {}
 
-    explanation = exp_match.group(1).strip()
+def parse_output(
+    text: str,
+    *,
+    enable_llm_repair: bool = False,
+    llm_repair_fn: Optional[Callable[[str], str]] = None
+) -> Tuple[str, List[str], List[List[str]], Dict[str, str], Dict[str, List[str]], Dict[str, str]]:
+    """
+    Parse LLM output and return:
+      explanation, nodes, edges, annotations, layers, edge_types
 
-    # ---------------------------------------------------
-    # 2. Extract DIAGRAM JSON block safely
-    # ---------------------------------------------------
-    json_match = re.search(
-        r"\[DIAGRAM_JSON\]\s*(\{.*\})",
-        cleaned,
-        re.DOTALL
-    )
+    Parameters:
+    - enable_llm_repair: if True and local repairs fail, call `llm_repair_fn(raw_json_text)` which should
+      return a string containing only a valid JSON object to be parsed.
+    - llm_repair_fn: Callable that accepts the raw JSON-like text and returns valid JSON string.
 
-    if not json_match:
-        # JSON section missing
+    Returns safe defaults on failure.
+    """
+    EMPTY = ("", [], [], {}, {}, {})
+
+    if not isinstance(text, str) or not text.strip():
+        return EMPTY
+
+    text = text.replace("\r\n", "\n")
+
+    # Remove decorative equal lines that some prompts include around tags
+    cleaned = re.sub(r"=+\s*\n", "", text)
+
+    # Try to capture explanation and JSON-section robustly
+    explanation = ""
+    after_json_section = ""
+
+    if "[EXPLANATION]" in cleaned and "[DIAGRAM_JSON]" in cleaned:
+        try:
+            after_exp = cleaned.split("[EXPLANATION]", 1)[1]
+            explanation_part, json_part = after_exp.split("[DIAGRAM_JSON]", 1)
+            explanation = explanation_part.strip()
+            after_json_section = json_part.strip()
+        except Exception:
+            # fallthrough to more tolerant extraction below
+            pass
+
+    if not explanation and "[DIAGRAM_JSON]" in cleaned:
+        idx = cleaned.index("[DIAGRAM_JSON]")
+        pre = cleaned[:idx]
+        if "[EXPLANATION]" in pre:
+            explanation = pre.split("[EXPLANATION]", 1)[1].strip()
+        else:
+            explanation = pre.strip()
+        after_json_section = cleaned[idx + len("[DIAGRAM_JSON]"):].strip()
+
+    if not explanation and "[EXPLANATION]" in cleaned:
+        try:
+            explanation = cleaned.split("[EXPLANATION]", 1)[1].strip()
+        except Exception:
+            explanation = cleaned.strip()
+
+    # Find JSON candidates (prefer inside after_json_section)
+    candidates = _extract_json_candidates(after_json_section) if after_json_section else []
+    if not candidates:
+        candidates = _extract_json_candidates(cleaned)
+
+    if not candidates:
         return explanation, [], [], {}, {}, {}
 
-    json_text = json_match.group(1)
+    parsed_obj = None
+    for cand in candidates:
+        parsed = _try_load_candidate(cand)
+        if isinstance(parsed, dict):
+            parsed_obj = parsed
+            break
 
-    try:
-        obj = json.loads(json_text)
-        return (
-            explanation,
-            obj.get("nodes", []),
-            obj.get("edges", []),
-            obj.get("annotations", {}),
-            obj.get("layers", {}),
-            obj.get("edge_types", {})
-        )
-    except Exception:
-        # JSON invalid
+    # If local repair failed and LLM repair requested, try that
+    if parsed_obj is None and enable_llm_repair and llm_repair_fn is not None:
+        # join candidates to provide context to repair function
+        joined = "\n\n".join(candidates)
+        try:
+            repaired = llm_repair_fn(joined)
+            if repaired and isinstance(repaired, str):
+                # try to load repaired string directly
+                try:
+                    parsed_obj = json.loads(repaired)
+                except Exception:
+                    # also try normalized repairs
+                    parsed_obj = _try_load_candidate(repaired)
+        except Exception:
+            parsed_obj = None
+
+    if parsed_obj is None:
+        # parsing failed
         return explanation, [], [], {}, {}, {}
+
+    # Extract fields with safe fallbacks
+    nodes = parsed_obj.get("nodes") if isinstance(parsed_obj.get("nodes"), list) else []
+    edges = parsed_obj.get("edges") if isinstance(parsed_obj.get("edges"), list) else []
+    annotations = parsed_obj.get("annotations") if isinstance(parsed_obj.get("annotations"), dict) else {}
+    layers = parsed_obj.get("layers") if isinstance(parsed_obj.get("layers"), dict) else {}
+    edge_types = parsed_obj.get("edge_types") if isinstance(parsed_obj.get("edge_types"), dict) else {}
+
+    # Clean types
+    nodes = [str(n) for n in nodes if isinstance(n, (str, int))]
+    cleaned_edges = []
+    for e in edges:
+        if isinstance(e, (list, tuple)) and len(e) >= 2:
+            cleaned_edges.append([str(e[0]), str(e[1])])
+    edges = cleaned_edges
+    annotations = {str(k): str(v) for k, v in annotations.items()}
+    layers = {str(k): [str(x) for x in v] for k, v in layers.items() if isinstance(v, list)}
+    edge_types = {str(k): str(v) for k, v in edge_types.items()}
+
+    return explanation, nodes, edges, annotations, layers, edge_types
