@@ -3,7 +3,7 @@ from llm_client import call_llm
 from diagram_parser import parse_output
 from diagram_builder import build_graph
 from io import BytesIO
-
+from kroki_renderer import generate_svg_from_dot, generate_png_from_dot, generate_pdf_from_dot
 
 # =============================
 # PAGE CONFIG
@@ -13,7 +13,6 @@ st.set_page_config(
     layout="wide",
     page_icon="🧩"
 )
-
 
 # =============================
 # HEADER
@@ -32,7 +31,6 @@ st.markdown(
 )
 st.markdown("---")
 
-
 # =============================
 # USER INPUT
 # =============================
@@ -45,7 +43,6 @@ requirement = st.text_area(
 )
 
 generate = st.button("✨ Generate Architecture", use_container_width=True)
-
 
 # =============================
 # PROCESS REQUEST
@@ -81,7 +78,6 @@ if generate:
                     unsafe_allow_html=True
                 )
 
-
                 # =============================
                 # DIAGRAM SECTION
                 # =============================
@@ -97,18 +93,55 @@ if generate:
                         dark_mode=True
                     )
 
+                    # Render interactive diagram in Streamlit UI
                     st.graphviz_chart(graph)
 
-                    # =============================
-                    # DOWNLOAD: SVG (Works on Streamlit Cloud)
-                    # =============================
-                    svg_bytes = graph.pipe(format="svg")
-                    st.download_button(
-                        "📥 Download Diagram (SVG)",
-                        svg_bytes,
-                        "architecture.svg",
-                        "image/svg+xml"
-                    )
+                    # ----------------------------
+                    # SVG Export via Kroki (recommended)
+                    # ----------------------------
+                    try:
+                        svg_bytes = generate_svg_from_dot(graph.source)
+                        st.download_button(
+                            "📥 Download Diagram (SVG)",
+                            svg_bytes,
+                            "architecture.svg",
+                            "image/svg+xml"
+                        )
+                    except Exception as ex_svg:
+                        st.warning("SVG export failed (Kroki). You can still copy diagram source or try again.")
+                        st.exception(ex_svg)
+
+                    # ----------------------------
+                    # PNG Export (on-demand)
+                    # ----------------------------
+                    if st.button("📥 Generate & Download PNG"):
+                        try:
+                            png_bytes = generate_png_from_dot(graph.source)
+                            st.download_button(
+                                "Download PNG now",
+                                png_bytes,
+                                "architecture.png",
+                                "image/png"
+                            )
+                        except Exception as ex_png:
+                            st.error("PNG generation failed (Kroki).")
+                            st.exception(ex_png)
+
+                    # ----------------------------
+                    # PDF Export (on-demand)
+                    # ----------------------------
+                    if st.button("📄 Generate & Download PDF"):
+                        try:
+                            pdf_bytes = generate_pdf_from_dot(graph.source)
+                            st.download_button(
+                                "Download PDF now",
+                                pdf_bytes,
+                                "architecture.pdf",
+                                "application/pdf"
+                            )
+                        except Exception as ex_pdf:
+                            st.error("PDF generation failed (Kroki).")
+                            st.exception(ex_pdf)
 
                     # =============================
                     # DOWNLOAD: Explanation MD
@@ -133,7 +166,6 @@ if generate:
 
                 else:
                     st.warning("⚠️ Diagram JSON invalid. Try refining your prompt.")
-
 
             except Exception as e:
                 st.error("❌ Error generating architecture.")
