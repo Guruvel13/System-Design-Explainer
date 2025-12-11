@@ -1,11 +1,10 @@
 # llm_client.py
-# Groq + Llama-3.1-8b-instant integration for SystemSketch AI
-# Sends a detailed system-design prompt and returns the model's raw text output.
-# Improved prompt requests richer explanation + explicit, detailed diagram explanation.
+# Stable Groq Llama client for SystemSketch AI — fully fixed version
 
 import os
 from typing import Optional
 from groq import Groq
+
 
 SYSTEM_PROMPT = """
 You are a senior system architect with expert-level experience designing fault-tolerant, highly scalable distributed systems.
@@ -17,45 +16,41 @@ Your output MUST contain ONLY the two sections shown below.
 ==================================================
 Provide a deeply detailed, highly practical system design (max ~700 words).
 Write clearly, visually, and with strong architectural reasoning. Use headings, short paragraphs, and bullets.
-Cover these subsections (each as a short heading + bullets / short paragraphs):
 
-1) Problem Summary — who uses the system and the core problem.
-2) Functional Breakdown — succinct feature list mapped to components.
-3) Non-Functional Impact — how performance, availability, latency, and scalability shape choices.
-4) High-Level Architecture — monolith / microservices / hybrid decision with justification.
-5) Layered Architecture View — describe Client, API, Service, Data, Infra layers and their responsibilities.
-6) Step-by-Step Data Flow — provide a clear lifecycle using arrows (→) and mention protocols (HTTP, WebSocket, gRPC, etc.).
-7) Component Responsibilities — for each major node, one-line responsibility.
-8) Detailed Diagram Explanation — map each node and each edge to an explanation (why it exists, what data flows, QoS, failure modes).
-   - For nodes: include storage, consistency, expected TTLs, scaling strategy.
-   - For edges: include protocol, sync/async, reliability pattern (retry, DLQ).
-9) Scalability & Partitioning — sharding, queues, partition keys, autoscaling triggers.
-10) Storage Strategy — primary DB choice, indexing, backup, retention.
-11) Caching Strategy — what to cache, invalidation, eviction policy.
-12) Load Balancing & Traffic Management — placement of LBs, routing, sticky sessions if any.
-13) Security & Compliance — AuthN/AuthZ, encryption, secrets, audit, rate limits.
-14) Fault Tolerance & Recovery — retries, circuit breakers, multi-AZ, RTO/RPO.
-15) Observability & SLOs — metrics, traces, logs, alerting, dashboards.
-16) Deployment & DevOps — CI/CD, IaC, rollout strategy (canary/blue-green), runbook pointers.
-17) Trade-offs & Alternatives — short pros/cons and alternatives considered.
-18) Recommended Tech Stack — concrete suggestions (frameworks, DBs, caches, queues, infra).
+Include the following subsections:
+1) Problem Summary
+2) Functional Breakdown
+3) Non-Functional Impact
+4) High-Level Architecture (with justification)
+5) Layered Architecture View
+6) Step-by-Step Data Flow (with arrows →)
+7) Component Responsibilities
+8) Detailed Diagram Explanation (every node + every edge explained)
+9) Scalability & Partitioning
+10) Storage Strategy
+11) Caching Strategy
+12) Load Balancing & Traffic Management
+13) Security & Compliance
+14) Fault Tolerance & Recovery
+15) Observability & SLOs
+16) Deployment & DevOps
+17) Trade-offs & Alternatives
+18) Recommended Tech Stack
 
-Rules for [EXPLANATION]:
-- Use headings and bullets, keep paragraphs short.
-- Include a distinct "Detailed Diagram Explanation" subsection that lists each node and each edge and explains it in 1-2 lines.
-- Avoid code snippets.
-- Be practical and specific; when mentioning technologies, provide concise rationale.
+Rules:
+- No code.
+- Keep paragraphs short.
+- Use clear heading labels, not markdown symbols like ### or **.
+- The Detailed Diagram Explanation MUST map each component and each edge to its purpose.
 
 ==================================================
 [DIAGRAM_JSON]
 ==================================================
-Return STRICT VALID JSON only, with these fields:
+Return STRICT VALID JSON ONLY.
 
 {
   "nodes": ["ComponentA", "ComponentB"],
-  "edges": [
-    ["ComponentA", "ComponentB"]
-  ],
+  "edges": [["ComponentA", "ComponentB"]],
   "annotations": {
     "ComponentA": "Short description (<= 10 words)",
     "ComponentB": "Short description (<= 10 words)"
@@ -72,77 +67,70 @@ Return STRICT VALID JSON only, with these fields:
   }
 }
 
-DIAGRAM JSON RULES (strict):
-- MUST be valid JSON and nothing else in the [DIAGRAM_JSON] section.
-- MUST include nodes, edges, annotations, layers, edge_types.
-- annotations: one-line descriptions under 10 words per node.
-- edge_types keys must use the exact "Source->Target" format.
-- Edges must represent real communication paths described in the explanation.
-- No comments, no trailing commas, no extra text after JSON.
-- Use 3–12 meaningful components (recommended).
+STRICT RULES:
+- JSON must be valid.
+- No comments.
+- No trailing commas.
+- No text after JSON.
+- 3–12 meaningful components.
+- Annotation text <= 10 words.
+- Edges must reflect the data flow described in the explanation.
 
-IMPORTANT:
-- If any assumption is made (e.g., expected traffic, retention), prefix it with "ASSUMPTION:" in the explanation.
-- If something is underspecified, state the assumption concisely in the explanation.
-
-Output format must be exactly:
+Output must be exactly:
 [EXPLANATION]
-...text...
+<text>
 [DIAGRAM_JSON]
-{ ...valid json... }
+<json>
 """
+
 
 def call_llm(requirement: str, model_name: Optional[str] = "llama-3.1-8b-instant") -> str:
     """
-    Sends the structured SYSTEM_PROMPT + requirement to Groq and returns the assistant content.
-    Robustly handles different Groq SDK response shapes.
+    Sends the SYSTEM_PROMPT + USER REQUIREMENT to Groq and returns clean assistant content.
+    Fully compatible with all Groq SDK versions.
     """
+
     api_key = os.getenv("GROQ_API_KEY")
     if not api_key:
         raise RuntimeError(
-            "GROQ_API_KEY is missing. Add it in Streamlit Cloud → App → Settings → Secrets:\n"
+            "GROQ_API_KEY missing. Add it in Streamlit Secrets:\n"
             'GROQ_API_KEY = "gsk_your_real_key_here"'
         )
 
     client = Groq(api_key=api_key)
+
     prompt = f"{SYSTEM_PROMPT}\n\nUSER REQUIREMENT:\n{requirement}"
 
     try:
         completion = client.chat.completions.create(
             model=model_name,
             messages=[{"role": "user", "content": prompt}],
-            temperature=0.15,   # deterministic & structured output
-            max_tokens=1400,    # allow richer explanation while staying reasonable
+            temperature=0.15,
+            max_tokens=1400,
             top_p=0.9
         )
 
-        # Safely extract assistant content across SDK versions
+        # -------------------------------
+        # UNIVERSAL SAFE CONTENT EXTRACTOR
+        # -------------------------------
         choice = completion.choices[0]
-        content = None
 
-        # Common pattern: choice.message.content
-        if hasattr(choice, "message"):
+        # Case 1: response.choice.message.content exists
+        if hasattr(choice, "message") and hasattr(choice.message, "content"):
+            return choice.message.content.strip()
+
+        # Case 2: some Groq SDKs return message as dict
+        if hasattr(choice, "message") and isinstance(choice.message, dict):
             msg = choice.message
-            if isinstance(msg, str):
-                content = msg
-            elif hasattr(msg, "content"):
-                content = msg.content
-            elif isinstance(msg, dict):
-                # defensive handling if SDK returns dict-like message
-                content = msg.get("content") or msg.get("message") or str(msg)
-            else:
-                content = str(msg)
+            content = msg.get("content") or msg.get("text") or str(msg)
+            return content.strip()
 
-        # Older fallback: choice.text
-        if content is None and hasattr(choice, "text"):
-            content = choice.text
+        # Case 3: fallback older `.text` attribute
+        if hasattr(choice, "text"):
+            return choice.text.strip()
 
-        # Last fallback
-        if content is None:
-            content = str(choice)
-
-        return content.strip()
+        # Case 4: last fallback
+        return str(choice).strip()
 
     except Exception as e:
-        # Surface useful error without leaking secrets
-        raise RuntimeError(f"GROQ API ERROR: {e}")
+        raise RuntimeError(f"GROQ API ERROR: {str(e)}")

@@ -1,102 +1,40 @@
 # diagram_builder.py
 from graphviz import Digraph
 
-
-def build_graph(
-    nodes,
-    edges,
-    annotations=None,
-    layers=None,
-    edge_types=None,
-    dark_mode=False
-):
-    """
-    Builds a clean, professional architecture diagram using Graphviz.
-    Supports layers, annotations, and edge-type labels.
-    Works for both layered and non-layered diagrams.
-    """
-
-    annotations = annotations or {}
-    layers = layers or {}
-    edge_types = edge_types or {}
-
-    # Theme settings
+def build_graph(nodes, edges, annotations=None, layers=None, edge_types=None, dark_mode=True):
     if dark_mode:
-        bg_color = "#0f0f0f"
-        font_color = "white"
-        cluster_color = "#2b2b2b"
-        node_color = "#1e1e1e"
-        edge_color = "#bfbfbf"
+        bg = "#0f0f0f"
+        font = "white"
+        cluster = "#2b2b2b"
+        box = "#1e1e1e"
     else:
-        bg_color = "white"
-        font_color = "black"
-        cluster_color = "#f0f0f0"
-        node_color = "#ffffff"
-        edge_color = "#333333"
+        bg = "white"
+        font = "black"
+        cluster = "#f0f0f0"
+        box = "#ffffff"
 
-    dot = Digraph(format="png")
-    dot.attr(
-        rankdir="LR",
-        bgcolor=bg_color,
-        fontcolor=font_color,
-        color=font_color,
-        concentrate="true",
-        splines="spline"
-    )
+    dot = Digraph()
+    dot.attr(rankdir="LR", bgcolor=bg, fontcolor=font)
 
-    # Build layered diagram if available
+    # Draw layers
     if layers:
-        for layer_name, comps in layers.items():
-            with dot.subgraph(name=f"cluster_{layer_name}") as sub:
-                sub.attr(
-                    label=layer_name.upper(),
-                    style="filled",
-                    bgcolor=cluster_color,
-                    color="#888888",
-                    fontcolor=font_color
-                )
+        for lname, comps in layers.items():
+            with dot.subgraph(name=f"cluster_{lname}") as sub:
+                sub.attr(label=lname.upper(), style="filled", bgcolor=cluster)
 
-                for comp in comps:
-                    desc = annotations.get(comp, "")
-                    label = f"{comp}\n{desc}" if desc else comp
-                    sub.node(
-                        comp,
-                        label=label,
-                        style="filled",
-                        fillcolor=node_color,
-                        fontcolor=font_color,
-                        shape="box",
-                        penwidth="1.8"
-                    )
+                for c in comps:
+                    desc = annotations.get(c, "") if annotations else ""
+                    label = f"{c}\n{desc}" if desc else c
+                    sub.node(c, label=label, style="filled", fillcolor=box, fontcolor=font)
     else:
-        # Fallback → draw nodes normally
-        for comp in nodes:
-            desc = annotations.get(comp, "")
-            label = f"{comp}\n{desc}" if desc else comp
-            dot.node(
-                comp,
-                label=label,
-                style="filled",
-                fillcolor=node_color,
-                fontcolor=font_color,
-                shape="box",
-                penwidth="1.8"
-            )
+        for c in nodes:
+            desc = annotations.get(c, "") if annotations else ""
+            label = f"{c}\n{desc}" if desc else c
+            dot.node(c, label=label, style="filled", fillcolor=box, fontcolor=font)
 
-    # Draw edges with types
+    # Edges
     for src, dst in edges:
-        if not src or not dst:
-            continue
-
-        label = edge_types.get(f"{src}->{dst}", "")
-
-        dot.edge(
-            src,
-            dst,
-            label=label,
-            fontsize="12",
-            color=edge_color,
-            fontcolor=font_color
-        )
+        elabel = edge_types.get(f"{src}->{dst}", "") if edge_types else ""
+        dot.edge(src, dst, label=elabel, fontcolor=font)
 
     return dot
