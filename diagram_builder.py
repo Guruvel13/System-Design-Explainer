@@ -1,33 +1,29 @@
-# diagram_builder.py (FINAL FIXED)
+# diagram_builder.py
 from graphviz import Digraph
 
 def build_graph(nodes, edges, annotations=None, layers=None, edge_types=None, dark_mode=False):
-
-    annotations = annotations or {}
-    layers = layers or {}
-    edge_types = edge_types or {}
-
-    fg = "white" if dark_mode else "black"
-    bg = "#111111" if dark_mode else "white"
-    node_color = "#222222" if dark_mode else "#f8f8f8"
+    bg = "#0f0f0f" if dark_mode else "white"
+    font = "white" if dark_mode else "black"
+    cluster_bg = "#2b2b2b" if dark_mode else "#f5f5f5"
+    node_bg = "#1e1e1e" if dark_mode else "#ffffff"
 
     dot = Digraph()
     dot.attr(rankdir="LR", bgcolor=bg)
 
-    # Layered nodes
     if layers:
-        for layer, comps in layers.items():
-            with dot.subgraph(name=f"cluster_{layer}") as sub:
-                sub.attr(label=layer.upper(), color="#666666")
-                for c in comps:
-                    sub.node(c, f"{c}\n{annotations.get(c,'')}", style="filled", fillcolor=node_color, fontcolor=fg)
+        for lname, comps in layers.items():
+            with dot.subgraph(name=f"cluster_{lname}") as sub:
+                sub.attr(label=lname.upper(), style="filled", bgcolor=cluster_bg)
+                for comp in comps:
+                    desc = (annotations or {}).get(comp, "")
+                    sub.node(comp, f"{comp}\n{desc}", fillcolor=node_bg, style="filled", fontcolor=font)
     else:
-        for c in nodes:
-            dot.node(c, f"{c}\n{annotations.get(c,'')}", style="filled", fillcolor=node_color, fontcolor=fg)
+        for comp in nodes:
+            desc = (annotations or {}).get(comp, "")
+            dot.node(comp, f"{comp}\n{desc}", fillcolor=node_bg, style="filled", fontcolor=font)
 
-    # Edges
     for src, dst in edges:
-        label = edge_types.get(f"{src}->{dst}", "")
-        dot.edge(src, dst, label=label, fontcolor=fg)
+        etype = (edge_types or {}).get(f"{src}->{dst}", "")
+        dot.edge(src, dst, label=etype)
 
     return dot
