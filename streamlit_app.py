@@ -133,4 +133,4 @@ if generate:
 
             except Exception as e:
                 st.error("❌ Error generating architecture.")
-                st.exception(e)
+                st.exception(e)  
