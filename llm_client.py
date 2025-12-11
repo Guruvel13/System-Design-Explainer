@@ -23,12 +23,12 @@ Write using **visual-friendly formatting**, including:
 - Arrows (→) to show flow
 - Real-world system analogies where useful
 
-(… your full explanation rules remain unchanged …)
+(… explanation prompt continues …)
 
 ==================================================
 [DIAGRAM_JSON]
 ==================================================
-Return STRICT VALID JSON describing the architecture in a structured format:
+Return STRICT VALID JSON describing the architecture:
 
 {
   "nodes": ["ComponentA", "ComponentB"],
@@ -52,19 +52,25 @@ Return STRICT VALID JSON describing the architecture in a structured format:
 }
 
 JSON RULES:
-- MUST be valid JSON
 - MUST include nodes, edges, annotations, layers, edge_types
-- No comments, no backticks, no trailing commas
-- No text after the JSON block
+- MUST be valid JSON
+- No trailing commas or comments
+- No text after JSON block
 - 2–12 components only
 """
 
+
+
 def call_llm(requirement: str, model_name: Optional[str] = "llama-3.1-8b-instant") -> str:
+    """
+    Calls the Groq API and returns ONLY the model response text.
+    Handles all message formats safely across Groq SDK versions.
+    """
     api_key = os.getenv("GROQ_API_KEY")
     if not api_key:
         raise RuntimeError(
             "GROQ_API_KEY missing. Add it in Streamlit Secrets:\n"
-            'GROQ_API_KEY="gsk_your_key"'
+            'GROQ_API_KEY="gsk_your_key_here"'
         )
 
     client = Groq(api_key=api_key)
@@ -81,9 +87,22 @@ def call_llm(requirement: str, model_name: Optional[str] = "llama-3.1-8b-instant
 
         choice = completion.choices[0]
 
+        # -------- SAFE CONTENT EXTRACTION -------- #
         if hasattr(choice, "message"):
-            return choice.message.get("content", "").strip()
+            msg = choice.message
 
+            # Case 1: message is pure string
+            if isinstance(msg, str):
+                return msg.strip()
+
+            # Case 2: new Groq API → message.content
+            if hasattr(msg, "content"):
+                return msg.content.strip()
+
+            # Case 3: unknown object → convert to string
+            return str(msg).strip()
+
+        # Older fallback API style
         if hasattr(choice, "text"):
             return choice.text.strip()
 
