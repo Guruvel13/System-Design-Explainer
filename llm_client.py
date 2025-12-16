@@ -43,10 +43,36 @@ Mandatory subsections:
 18) Recommended Tech Stack
 
 [DIAGRAM_JSON]
-Return STRICT VALID JSON ONLY (only JSON, nothing else). Must include:
-nodes, edges, annotations, layers, edge_types.
-3-12 components. Annotations <=10 words per node.
-Output must end immediately after the closing brace.
+Generate ONLY valid JSON. No text before or after. Use this EXACT format:
+
+{
+  "nodes": ["ComponentA", "ComponentB", "ComponentC"],
+  "edges": [
+    ["ComponentA", "ComponentB"],
+    ["ComponentB", "ComponentC"]
+  ],
+  "annotations": {
+    "ComponentA": "Brief description",
+    "ComponentB": "Brief description"
+  },
+  "layers": {
+    "Frontend": ["ComponentA"],
+    "Backend": ["ComponentB", "ComponentC"]
+  },
+  "edge_types": {
+    "ComponentA->ComponentB": "HTTP",
+    "ComponentB->ComponentC": "gRPC"
+  }
+}
+
+CRITICAL RULES:
+- Use double quotes for all strings
+- Include 4-10 nodes minimum
+- All edge nodes must exist in nodes array
+- Annotations should be under 10 words each
+- No trailing commas
+- No comments
+- End immediately after closing brace
 """
 
 # Simple in-memory cache for LLM responses

@@ -392,6 +392,10 @@ if generate:
     else:
         with st.spinner("🤖 AI is crafting your architecture..."):
             try:
+                # Import metrics functions
+                from diagram_parser import get_parse_metrics, reset_metrics
+                from llm_client import get_cache_stats
+                
                 raw = call_llm(req)
                 explanation, nodes, edges, annotations, layers, edge_types = parse_output(raw)
 
@@ -459,16 +463,43 @@ if generate:
                 else:
                     st.markdown("""
                     <div class='warning-card'>
-                        ⚠️ Unable to generate diagram from the AI response. Please try refining your prompt or try again.
+                        ⚠️ Unable to generate diagram from the AI response. The AI provided an explanation but the diagram data couldn't be parsed.
                     </div>
                     """, unsafe_allow_html=True)
+                    
+                    # Show helpful debugging info
+                    st.info("💡 **Tip**: Try making your prompt more specific or regenerate the architecture.")
+                    
+                    # Show parse metrics
+                    metrics = get_parse_metrics()
+                    if metrics:
+                        st.markdown("**Parser Statistics:**")
+                        col1, col2, col3 = st.columns(3)
+                        with col1:
+                            st.metric("Success Rate", f"{metrics.get('success_rate', 0)}%")
+                        with col2:
+                            st.metric("Total Attempts", metrics.get('total_attempts', 0))
+                        with col3:
+                            st.metric("Auto Repairs", metrics.get('auto_repairs', 0))
+                    
                     with st.expander("🔍 Show Raw AI Output"):
                         st.code(raw, language="text")
+                        
+                        # Try to highlight where the JSON should be
+                        if "[DIAGRAM_JSON]" in raw:
+                            json_start = raw.find("[DIAGRAM_JSON]")
+                            st.markdown("**JSON Section Found At:**")
+                            st.code(raw[json_start:json_start+200] + "...", language="text")
 
             except Exception as e:
                 st.error("❌ An error occurred while generating the architecture. Please try again.")
                 with st.expander("🔍 View Error Details"):
                     st.exception(e)
+                    st.markdown("**Possible Solutions:**")
+                    st.markdown("- Check your GROQ_API_KEY is set correctly")
+                    st.markdown("- Try a simpler requirement first")
+                    st.markdown("- Check internet connection")
+                    st.markdown("- Wait a moment and try again")
 
 # Footer
 st.markdown("<br><br>", unsafe_allow_html=True)

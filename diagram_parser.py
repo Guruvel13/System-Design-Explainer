@@ -283,6 +283,25 @@ def parse_output(
     if parsed_obj is None:
         logger.error("All JSON parsing attempts failed")
         _parse_metrics["failed_parses"] += 1
+        
+        # Emergency fallback: try to create a minimal diagram
+        # Extract any capitalized words as potential node names
+        if explanation:
+            import re
+            # Find capitalized words and common system components
+            potential_nodes = re.findall(r'\b[A-Z][a-z]+(?:\s+[A-Z][a-z]+)*\b', explanation)
+            # Filter to likely component names (avoid common words)
+            common_words = {'The', 'This', 'These', 'Those', 'When', 'Where', 'While', 'With', 'Which'}
+            potential_nodes = [n for n in potential_nodes if n not in common_words]
+            
+            # If we found potential nodes, create a simple linear diagram
+            if len(potential_nodes) >= 2:
+                unique_nodes = list(dict.fromkeys(potential_nodes))[:6]  # Max 6 nodes
+                simple_edges = [[unique_nodes[i], unique_nodes[i+1]] for i in range(len(unique_nodes)-1)]
+                
+                logger.info(f"Created fallback diagram with {len(unique_nodes)} nodes from explanation")
+                return explanation, unique_nodes, simple_edges, {}, {}, {}
+        
         return explanation, [], [], {}, {}, {}
     
     # Extract and clean diagram components
